@@ -15,10 +15,10 @@ HorizontalPodAutoscaler 的常见用途是将其配置为从 Aggregated APIs （
 - 对于外部指标，将使用 external.metrics.k8s.io API。 可能由上面的自定义指标适配器提供。
 
 ## 3. keda 是什么
-1. KEDA 提供了一套 CRD ，常见用途是声明 ScaledObject ，keda-operator 按声明 ScaledObject 创建对应的HPA ，并能激活 HPA 的部署（0 -> 1）。[源码分析](./2024-04-03-keda-operator源码分析.md)
+1. KEDA 提供了一套 CRD ，常见用途是声明 ScaledObject ，keda-operator 按声明 ScaledObject 创建对应的HPA ，并能激活 HPA 的部署（0 -> 1）。[源码分析](../keda-operator-源码分析)
 > * 0 -> 1 指的是，如果当前副本数为 0 但是 hpa 定义的最小 replicas 不等0 时，被认为关闭弹性伸缩的能力，HPA 不会再进行伸缩操作。而 KEDA 实现了个控制，但一旦缩放到 1 后，伸缩操作取决于 HPA。
 
-2. KEDA 提供 keda-operator-metrics-apiserver，实现 external.metrics.k8s.io API ，为 HPA 获取 Kubernetes 集群外部的指标源的指标。 [源码分析](./2024-04-03-keda-operator-metrics-apiserver源码分析.md)
+2. KEDA 提供 keda-operator-metrics-apiserver，实现 external.metrics.k8s.io API ，为 HPA 获取 Kubernetes 集群外部的指标源的指标。 [源码分析](../keda-operator-metrics-apiserver-源码分析)
 
 > * 想知道当前注册了哪些外部指标服务器
 ~~~
