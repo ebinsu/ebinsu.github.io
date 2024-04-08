@@ -3,8 +3,6 @@ categories: [K8S, KEDA]
 tags: keda
 ---
 
-# keda-operator-metrics-apiserver 如何为 HPA 提供指标
-
 ## 概念
 
 先了解下如何通过 Kubernetes API Server 暴露的 HTTP API 找到对应的资源信息。举个例子，想要通过 API 接口查命名空间 keda 下的 Deployment：
@@ -42,8 +40,7 @@ GVR：group & version & resource
 ├── ....
 ~~~
 
-## 流程图
-![](../assets/images/keda/keda-operator-metrics-apiserver-sq.png)
+## 解析
 
 Kubectl 可以通过下面的 API ，获取到对应的指标。
 
@@ -59,6 +56,11 @@ Kubectl 可以通过下面的 API ，获取到对应的指标。
 "HTTP" verb="LIST" URI="/apis/external.metrics.k8s.io/v1beta1/namespaces/default/s0-redis-mylist?labelSelector=scaledobject.keda.sh%2Fname%3Dtest-so-3" latency="12.145371ms" userAgent="k3s/v1.28.5+k3s1 (linux/amd64) kubernetes/5b2d127/system:serviceaccount:kube-system:horizontal-pod-autoscaler" audit-ID="66f37fc6-3683-4d36-89c5-be8758cd154a" srcIP="10.42.0.1:46152" resp=200
 ~~~
 
-我们主要关注 ScaleHandler 的 GetScaledObjectMetrics 方法，通过指定的 namespaces 和 ScaledObject 名称找到 ScalersCache 。ScalersCache 主要包含 ScaledObject 和 ScaledObject指定的 Scaler。指标由实际指定的 Scaler 对象的 GetMetricsAndActivity 方法返回。
+该 HTTP API PATCH 最终由 ScaleHandler 的 GetScaledObjectMetrics 方法处理，所以我们先跳过 Kube Aggregator 转发的流程， 主要关注 ScaleHandler 的 GetScaledObjectMetrics 方法。
 
+该方法通过指定的 namespaces 和 ScaledObject 名称找到 ScalersCache 。ScalersCache 主要包含 ScaledObject 和 ScaledObject指定的 Scaler。指标由实际指定的 Scaler 对象的 GetMetricsAndActivity 方法返回。
 
+详细流程看下图:
+
+## 流程图
+![](../assets/images/keda/keda-operator-metrics-apiserver-sq.png)
