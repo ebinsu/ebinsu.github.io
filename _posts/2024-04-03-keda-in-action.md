@@ -35,7 +35,8 @@ kubectl get --raw /apis/external.metrics.k8s.io/v1beta1/namespaces/{namespaces}/
 
 KEDA 与 HPA 并无冲突关系，可以同时再 Kubernetes 使用，但不要将 KEDA ScaledObject 与 HPA 结合使用来扩展相同的目标资源（例如：Deployment 和 StatefulSet等）。
 
-## 4. Demo
+## 4. Demo 入门
+
 - External Scalers
 
 todo..
