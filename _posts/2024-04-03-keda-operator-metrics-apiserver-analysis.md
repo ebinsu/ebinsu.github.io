@@ -1,5 +1,5 @@
 ---
-categories: [K8S, KEDA]
+categories: [Kubernetes, KEDA]
 tags: keda
 ---
 
