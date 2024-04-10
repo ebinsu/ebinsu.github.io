@@ -1,0 +1,33 @@
+if isActive {
+	if idleReplicaCount != nil && currentReplicas < minReplicas  {
+		updateScaleOnScaleTarget -> max(minReplicaCount, 1)
+	} else if(currentReplicas == 0) {
+		updateScaleOnScaleTarget -> max(minReplicaCount, 1)
+	} else isError {
+		ScaledObject.Status.ReadyCondition -> Unknown
+	} else {
+		update ScaledObject.LastActiveTime to now
+	}
+} else {
+	if isError {
+		if fallback.replicas != 0 {
+			updateScaleOnScaleTarget -> fallback.replicas
+		} else {
+			ScaledObject.Status.ReadyCondition -> False
+		}
+	} else {
+		if idleReplicaCount != nil && currentReplicas > idleReplicaCount {
+			if ScaledObject.LastActiveTime == nil || ScaledObject.LastActiveTime.Add(cooldownPeriod).Before(now) {
+				updateScaleOnScaleTarget -> idleReplicaCount
+			}
+		} else currentReplicas > 0 && minReplicas == 0 {
+			if ScaledObject.LastActiveTime == nil || LastActiveTime.Add(cooldownPeriod).Before(now) {
+				updateScaleOnScaleTarget -> 0
+			}
+		} else currentReplicas < minReplicaCount && idleReplicaCount == nil {
+			updateScaleOnScaleTarget -> minReplicaCount
+		} else {
+			nothing needs to be done
+		}
+	}
+}
