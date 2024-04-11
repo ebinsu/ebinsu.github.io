@@ -59,13 +59,18 @@ spec:
       metadata:
         address: redis-nodeport.default:6379
         listName: async_task
-        listLength: "4"
+        listLength: "50"
+        activationListLength: "0"
   advanced:
     restoreToOriginalReplicaCount: true
     horizontalPodAutoscalerConfig:
       behavior:
         scaleUp:
-          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+        scaleDown:
           policies:
             - type: Pods
               value: 1
