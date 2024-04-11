@@ -16,7 +16,7 @@ timezone:
 
 title: Ebin Su # the main title
 
-tagline: Try to publish my notes into articles.
+tagline: # subtitle
 
 description: >- # used by seo meta and the atom feed
   A minimal, responsive and feature-rich Jekyll theme for technical writing.
