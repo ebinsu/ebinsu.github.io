@@ -47,6 +47,7 @@ externalScaler 实现了 PushScaler 的 Run 方法。 当 scaleHandler HandleSca
 ## 场景
 
 假设应用的 session 是由 Redis 存储，期望每个应用的实例最多只处理 100 个 session 的请求。 当 session 的数量大于 100 的时候，会启动一个新的实例。
+当 Redis 实例不可用时，缩放回 1 个实例。
 
 eg：
 
@@ -60,31 +61,6 @@ eg：
 | 250           | 3        |
 
 ## GRPC 服务端-代码清单
-### main.go
-~~~go
-func main() {
-	redisAddress := os.Getenv("REDIS_ADDRESS")
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     redisAddress,
-		Password: "",
-		DB:       0,
-	})
-	if err := rdb.Ping().Err(); err != nil {
-		panic(err)
-	}
-
-	grpcServer := grpc.NewServer()
-	lis, _ := net.Listen("tcp", ":6000")
-	// 注册 RedisSessionExternalScaler
-	pb.RegisterExternalScalerServer(grpcServer, pb.NewScaler(*rdb))
-
-	log.Println("listenting on :6000")
-	// 启动 grpcServer
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatal(err)
-	}
-}
-~~~
 ### RedisSessionExternalScaler.go
 ~~~go
 const (
@@ -143,60 +119,6 @@ func (e *RedisSessionExternalScaler) GetMetrics(_ context.Context, metricRequest
 }
 ~~~
 
-### deployment
-~~~yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: redis-session-scaler
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: redis-session-scaler
-  template:
-    metadata:
-      labels:
-        app: redis-session-scaler
-    spec:
-      containers:
-      - name: scaler
-        image: docker.io/ebinsu/redis-session-scaler:1.0
-        env:
-        - name: REDIS_ADDRESS
-          value: "redis-nodeport:6379"
-        ports:
-        - containerPort: 6000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-session-scaler
-spec:
-  ports:
-  - port: 6000
-    targetPort: 6000
-  selector:
-    app: redis-session-scaler
-~~~
+## 完整代码清单
 
-## Scaled Object-代码清单
-~~~yaml
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
-metadata:
-  name: redis-session-scaler
-spec:
-  scaleTargetRef:
-    name: test-deploy
-  minReplicaCount: 1
-  pollingInterval: 60
-  maxReplicaCount: 10
-  cooldownPeriod:  30
-  triggers:
-    - type: external
-      metricType: AverageValue
-      metadata:
-        scalerAddress: redis-session-scaler.default:6000
-        sessionSize: "100"
-~~~
+[github](https://github.com/ebinsu/ebinsu.github.io/tree/main/example/keda/redis-session-scaler-sample)
