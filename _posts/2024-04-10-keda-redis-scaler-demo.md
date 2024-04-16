@@ -3,7 +3,7 @@ categories: [ Kubernetes, KEDA ]
 tags: keda
 ---
 
-## 先决条件
+## 前言
 
 KEDA 提供的与 Redis 相关的 Scaler 只有两种： Redis Lists （ Cluster / Sentinel） ， Redis Streams （ Cluster / Sentinel）。
 
@@ -16,8 +16,10 @@ KEDA 提供的与 Redis 相关的 Scaler 只有两种： Redis Lists （ Cluster
 
 如果生产者、消费者服务各 1 个，那么每 2 秒就会堆积 3 个任务。 当消费者数量为 4 时，生产与消费能力持平，不会扩大堆积任务数量。
 
-Redis List Scaler 生成的 HPA metrics type 为 AverageValue。 由上可知，当为 4 时不会扩大堆积任务数量，所以可以通过 triggers.redis.metadata.listLength 控制预期任务堆积数量。
-随着时间的进行，堆积数量会控制在 <= 4 * triggers.redis.metadata.listLength 。
+Redis List Scaler 生成的 HPA metrics type 为 AverageValue。 由上述条件可知，当为 4 时不会扩大堆积任务数量，
+所以可以通过 triggers.redis.metadata.listLength 控制预期任务堆积数量。 随着时间的进行，堆积数量会控制在 <= 4 * triggers.redis.metadata.listLength 。
+
+* 仅对本场景适用
 
 例如设置为 2 ，最终会扩容至 4 个实例，并且堆积任务稳定在 8 个以下；
 例如设置为 4 ，最终会扩容至 4 个实例，并且堆积任务稳定在 16 个以下；

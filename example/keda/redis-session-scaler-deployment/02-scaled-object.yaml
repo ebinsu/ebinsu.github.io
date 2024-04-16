@@ -1,0 +1,17 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: redis-session-scaler
+spec:
+  scaleTargetRef:
+    name: test-deployment
+  minReplicaCount: 1
+  pollingInterval: 60
+  maxReplicaCount: 10
+  cooldownPeriod:  30
+  triggers:
+    - type: external
+      metricType: AverageValue
+      metadata:
+        scalerAddress: redis-session-scaler.default:6000
+        sessionSize: "100"
