@@ -60,6 +60,11 @@ eg：
 | 200           | 2        |
 | 250           | 3        |
 
+基于上述场景，我们使用 External Scaler 来实现，对应的 GRPC 服务需实现 IsActive、GetMetricSpec、GetMetrics 这三个接口。
+ - IsActive 检验 Redis 实例是否可用，不可用时返回 False，且 ScaledObject.spec.minReplicaCount = 1；idleReplicaCount = null。
+ - GetMetricSpec 定义 Metric Name 为 session_size，target size 从声明 ScaledObject 的 Metadata[sessionSize] 中获取；并且ScaledObject 声明的 metricType 要为 AverageValue。
+ - GetMetrics 返回请求时 Redis 实例的 DBSize。
+
 ## GRPC 服务端-代码清单
 ### RedisSessionExternalScaler.go
 ~~~go
@@ -86,7 +91,7 @@ func (e *RedisSessionExternalScaler) IsActive(ctx context.Context, scaledObject 
 }
 
 func (e *RedisSessionExternalScaler) GetMetricSpec(_ context.Context, ref *ScaledObjectRef) (*GetMetricSpecResponse, error) {
- // 返回 Metric 名称与指标值， 指标值从 Scaler Object Metadata 中定义的 sessionSize 获取
+ // 返回 Metric 名称与指标值， 指标值从 ScaledObject Metadata 中定义的 sessionSize 获取
 	sessionSize := defaultSessionSize
 	if val, ok := ref.ScalerMetadata["sessionSize"]; ok {
 		size, err := strconv.ParseInt(val, 10, 64)
