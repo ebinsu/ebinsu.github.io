@@ -1,10 +1,11 @@
 ---
 title: Keda Operator 代码分析
-categories: [Kubernetes, KEDA]
+categories: [ Kubernetes, KEDA ]
 tags: keda
 ---
 
 ## 代码结构
+
 ~~~
 ├── ....
 ├── cmd // 入口
@@ -17,28 +18,32 @@ tags: keda
 
 ## 解析
 
-KEDA 项目是用 kubebuilder SDK来完成 ScaledObject 的 Operator 编写。
+KEDA 项目使用 kubebuilder SDK 完成 ScaledObject 的 Operator 编写。
 
-组件启动入口在于main.go （cmd\operator\main.go）文件中： 通过 controller-runtime 组件启动 ScaledObjectReconciler。 
+组件的启动入口位于 main.go 文件（路径：cmd/operator/main.go），通过 controller-runtime 组件启动 ScaledObjectReconciler。
 
-ScaledObjectReconciler 是由 kubebuilder 生成的代码， 所以我们主要关注 ScaledObjectReconciler（controllers\keda\scaledobject_controller.go） 的 Reconcile 方法。
+ScaledObjectReconciler 是由 kubebuilder 生成的代码，因此我们主要关注的是 ScaledObjectReconciler 类的 Reconcile
+方法（文件路径：controllers/keda/scaledobject_controller.go）。
 
-我们可以带着 `Scaled Object 配置项的作用是什么？` 这个问题来阅读这个方法的代码，方便我们理解方法执行流程，下列配置说明可以结合时序图理解。
+在阅读 Reconcile 方法的代码时，我们可以思考以下问题以帮助理解执行流程：`Scaled Object 配置项的作用是什么？`,
+以下配置说明可以结合时序图来理解：
 
-1. ScaledObject 对象被删除的时。 当 `ScaledObject.spec.advanced.restoreToOriginalReplicaCount = true` 的时候，`scaleTargetRef.Spec.Replicas` 会被设置为 Replicas 子对象声明的 replicas 数量。
+1. 当 ScaledObject 对象被删除时，如果 `ScaledObject.spec.advanced.restoreToOriginalReplicaCount` 设置为
+   true，则 `scaleTargetRef.Spec.Replicas` 将被设置为 Replicas 子对象声明的 replicas 。
 
-2. ScaledObject 对象有 `autoscaling.keda.sh/paused: "true"` 这个 annotations 的时候，会暂停自动缩放。 scaledobject 处于暂停状态，
-如果当前的 replicas 数量不等于 `autoscaling.keda.sh/paused-replicas` 数，则触发缩放逻辑，让当前副本书等于暂停副本数。
+2. 当 ScaledObject 对象具有注解 `autoscaling.keda.sh/paused: "true"` 时，将暂停自动缩放。
+   如果当前的副本数不等于 `autoscaling.keda.sh/paused-replicas` 所声明的数量，则触发缩放逻辑，使当前副本数等于暂停时的副本数。
 
-3. ensureHPAForScaledObjectExists 方法按配置的 ScaledObject 对象创建HPA资源。
+3. ensureHPAForScaledObjectExists 方法根据配置的 ScaledObject 对象创建 HPA 资源。
+
 ~~~go
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
-		    // 如果 ScaledObject 对象有 paused 的 annotation，
-		    // 则 minReplicas 和 maxReplicas 就会等于 paused-replicas。
+     // 如果 ScaledObject 对象有 paused 的注解，
+     // 则 minReplicas 和 maxReplicas 将等于 paused-replicas。
 			MinReplicas: minReplicas,
 			MaxReplicas: maxReplicas,
-			// getScaledObjectMetricSpecs 方法会获取 triggers 中的 metrics 指标。
+			// scaledObjectMetricSpecs 是通过 getScaledObjectMetricSpecs 方法获取。
 			// 获取的时候会区分External metrics和Resource metrics，
 			// 因为 CPU/Memory scaler 是通过 resource metrics 来获取的。
 			Metrics:     scaledObjectMetricSpecs,
@@ -60,50 +65,48 @@ ScaledObjectReconciler 是由 kubebuilder 生成的代码， 所以我们主要�
 	}
 ~~~
 
-4. requestScaleLoop 方法用来循环检查 Scaler 中的 IsActive 状态并作出对应的处理，详细流程见下面 Active/InActive 活动图。
-- isActive = true
-> currentReplicas < minReplicas
-> 
->: : updateScaleOnScaleTarget -> max(minReplicaCount, 1)
-> 
-> currentReplicas == 0
-> 
->: : updateScaleOnScaleTarget -> max(minReplicaCount, 1)
-> 
-> isError = true 
-> 
->: : ScaledObject.Status.ReadyCondition -> Unknown
-- isActive = false
-  - isError = true
-> fallback.replicas != 0 
-> 
->: : updateScaleOnScaleTarget -> fallback.replicas
-> 
-> else ：
-> 
->: ：ScaledObject.Status.ReadyCondition -> False
-  - isError = false
-> idleReplicaCount != nil && currentReplicas > idleReplicaCount && ScaledObject.LastActiveTime.Add(cooldownPeriod).Before(now)
-> 
->: : updateScaleOnScaleTarget -> idleReplicaCount
-> 
-> currentReplicas > 0 && minReplicas == 0 && ScaledObject.LastActiveTime.Add(cooldownPeriod).Before(now)
-> 
->: : updateScaleOnScaleTarget -> 0
-> 
-> currentReplicas < minReplicaCount && idleReplicaCount == nil
-> 
->: : updateScaleOnScaleTarget -> minReplicaCount
+4. requestScaleLoop 方法用于循环检查 Scaler 中的 IsActive 状态，并根据状态进行相应的处理。（详细流程见下面的
+   Active/Inactive 活动图）
 
-总结：IsActive 为 true 的时候，如果 ScaleTarget Replicas 为 0，至少将它扩容为 1。
-为 false 的时候，有 error 时把 Replicas 扩缩容至 fallback.replicas 。 
-没 error 时，优先使用 idleReplicaCount ，其次再用 minReplicas 进行缩容。这个缩容的过程受上次 Active 时间至 cooldownPeriod 等待时间的影响。
+- isActive = true
+
+> if `currentReplicas < minReplicas` : `updateScaleOnScaleTarget -> max(minReplicaCount, 1)`
+>
+> if `currentReplicas == 0` : `updateScaleOnScaleTarget -> max(minReplicaCount, 1)`
+>
+> if `isError = true` : `ScaledObject.Status.ReadyCondition -> Unknown`
+
+- isActive = false
+
+> **isError = true**
+>
+> if `fallback.replicas != 0` : `updateScaleOnScaleTarget -> fallback.replicas`
+>
+> else ：`ScaledObject.Status.ReadyCondition -> False`
+> 
+> **isError = false**
+>
+> if `idleReplicaCount != nil && currentReplicas > idleReplicaCount && ScaledObject.LastActiveTime.Add(cooldownPeriod)
+> .Before(now)` : `updateScaleOnScaleTarget -> idleReplicaCount`
+>
+> if `currentReplicas > 0 && minReplicas == 0 && ScaledObject.LastActiveTime.Add(cooldownPeriod).Before(now)` : `updateScaleOnScaleTarget -> 0`
+>
+> if `currentReplicas < minReplicaCount && idleReplicaCount == nil` : `updateScaleOnScaleTarget -> minReplicaCount`
+
+总结：
+当 IsActive 为 true 时，如果 ScaleTarget 的副本数为 0，则至少将其扩展至 1。
+当 IsActive 为 false 时，如果发生错误，则将副本数缩放至 fallback.replicas。
+如果没有错误，则优先使用 idleReplicaCount，如果不可用，则使用 minReplicas 进行缩放。
+缩放过程受到上次活跃时间至冷却期（cooldownPeriod）等待时间的影响。
 
 ## 时序图
+
 ![](../assets/images/keda/keda-operator-sq.png)
 
 ## Active 活动图
+
 ![](../assets/images/keda/keda-operator-active-ad.png)
 
 ## InActive 活动图
+
 ![](../assets/images/keda/keda-operator-inactive-ad.png)
