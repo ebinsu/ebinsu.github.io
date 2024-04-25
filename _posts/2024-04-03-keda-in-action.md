@@ -3,7 +3,7 @@ categories: [Kubernetes, KEDA]
 tags: keda
 ---
 
-## 前言
+## 引言
 在我们学习 KEDA 之前，我们需要简单了解一些关于HPA的知识。本文还将从 Demo 与源码入手，进一步了解 KEDA 的实现原理。
 
 ## 1. HPA 是如何扩缩容？

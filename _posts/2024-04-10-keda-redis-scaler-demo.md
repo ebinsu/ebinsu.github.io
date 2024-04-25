@@ -3,43 +3,53 @@ categories: [ Kubernetes, KEDA ]
 tags: keda
 ---
 
-## 前言
+## 引言
 
-KEDA 提供的与 Redis 相关的 Scaler 只有两种： Redis Lists （ Cluster / Sentinel） ， Redis Streams （ Cluster / Sentinel）。
+KEDA 提供的与 Redis Scaler 主要有以下两种：
 
-如果需要更多 Redis 的指标操作的场景，则只能使用 External Scaler [（Demo）](../keda-external-scaler-demo) 编写相关的 Redis
-逻辑来实现。
+- Redis Lists（支持 Cluster 和 Sentinel）
+- Redis Streams（支持 Cluster 和 Sentinel）
+
+对于需要更多 Redis 指标操作的场景，我们可以通过编写 [External Scaler](../keda-external-scaler-demo) 来实现相关逻辑。
 
 ## 场景
 
-假设业务场景会产生多个异步计算任务，异步计算任务采用 Redis Lists 存储。 每个生产服务每 2 秒会产生 4 个任务，每个消费服务每2秒消费一个任务。
+假设业务场景涉及多个异步计算任务，这些任务使用 Redis Lists 存储。生产服务每 2 秒生成 4 个任务，而消费服务每 2
+秒处理一个任务。如果生产者和消费者服务各有一个实例，那么每 2 秒将累积 3 个任务。当消费者数量达到 4
+个时，生产和消费能力达到平衡，任务堆积数量将不再增加。
 
-如果生产者、消费者服务各 1 个，那么每 2 秒就会堆积 3 个任务。 当消费者数量为 4 时，生产与消费能力持平，不会扩大堆积任务数量。
+## Redis List Scaler 与 HPA
 
-Redis List Scaler 生成的 HPA metrics type 为 AverageValue。 由上述条件可知，当为 4 时不会扩大堆积任务数量，
-所以可以通过 triggers.redis.metadata.listLength 控制预期任务堆积数量。 随着时间的进行，堆积数量会控制在 <= 4 * triggers.redis.metadata.listLength 。
+Redis List Scaler 生成的 HPA（Horizontal Pod Autoscaler）指标类型为 AverageValue。根据上述场景，当消费者数量为 4
+时，任务堆积数量将保持在 Scaler triggers 的 redis.metadata.listLength 所设置的预期值以内。随着时间的推移，任务堆积数量将被控制在
+`4 * triggers.redis.metadata.listLength` 以内。
 
-* 仅对本场景适用
+* 这个逻辑仅适用于当前场景。
 
-例如设置为 2 ，最终会扩容至 4 个实例，并且堆积任务稳定在 8 个以下；
-例如设置为 4 ，最终会扩容至 4 个实例，并且堆积任务稳定在 16 个以下；
-例如设置为 50 ，最终会扩容至 4 个实例，并且堆积任务稳定在 200 个以下；
+例如：
 
-由于生产于消费的频率一致，如果已经堆积了大量的任务，消费者会被扩容至 5 个及以上，随着时间推移，任务将被清空，redis list key 会被 removed.
-而 Redis Lists Scaler Active 的状态受到 redis list key 是否存在影响。 当 list key 被 removed， Active为 Flase 。
-假设 minReplicas 为 1 ， replicas 会被设置为 1 ，这时又会开始产生堆积任务，再次触发扩缩容，最终稳定在 4 个实例。
+设置 listLength 为 2，最终实例数量将扩展至 4 个，且任务堆积数量稳定在 8 个以下。
+设置 listLength 为 4，最终实例数量将扩展至 4 个，且任务堆积数量稳定在 16 个以下。
+设置 listLength 为 50，最终实例数量将扩展至 4 个，且任务堆积数量稳定在 200 个以下。
+如果生产和消费的频率相同，并且已累积了大量任务，消费者实例将被扩展至 5 个或更多。随着时间的推移，任务将被清空，Redis list key
+将被移除。Redis Lists Scaler 的 Active 状态受 Redis list key 是否存在的影响。当 list key 被移除时，Active 状态为 False。如果
+minReplicas 设置为 1，实例数量将被设置为 1，随后又开始产生任务堆积，再次触发伸缩操作，最终稳定在 4 个实例。
 
-* 时间与 consumer 实例产生的堆积任务表：
+## 时间与消费者实例产生的任务堆积示例
 
-| time | 1 consumer | 2 consumer | 3 consumer | 4 consumer |
-|------|------------|------------|------------|------------|
-| 2s   | 3          | 2          | 1          | 0          |
-| 4s   | 6          | 4          | 2          | 0          |
-| 6s   | 9          | 6          | 3          | 0          |
-| ...  | ...        | ...        | ...        | ...        |
-| 22s  | 33         | 24         | 11         | 0          |
-| 24s  | 36         | 26         | 12         | 0          |
-| 26s  | 39         | 28         | 14         | 0          |
+| 时间（秒） | 消费者实例 | 任务堆积 |
+|-------|-------|------|
+| 1     | 1     | 0    |
+| 2     | 2     | 4    |
+| 3     | 3     | 8    |
+| 4     | 4     | 12   |
+| ……    | ……    | ……   |
+| 22    | 4     | 32   |
+| 24    | 4     | 36   |
+| 26    | 4     | 40   |
+| 28    | 4     | 44   |
+
+（注：表中数据为示例，实际情况可能有所不同）
 
 ## 代码清单
 
@@ -97,11 +107,11 @@ spec:
         app: producer
     spec:
       containers:
-      - name: producer
-        image: ebin/business-service:1.2
-        env:
-        - name: IS_PROCUDER
-          value: "true"
+        - name: producer
+          image: ebin/business-service:1.2
+          env:
+            - name: IS_PROCUDER
+              value: "true"
 ~~~
 
 > consumer.yaml
@@ -122,8 +132,8 @@ spec:
         app: consumer
     spec:
       containers:
-      - name: consumer
-        image: ebin/business-service:1.2
+        - name: consumer
+          image: ebin/business-service:1.2
 ~~~
 
 > business-service main.go

@@ -1,10 +1,12 @@
 ---
-categories: [Kubernetes, KEDA]
+categories: [ Kubernetes, KEDA ]
 tags: keda
 ---
 
-## 前言
-KEDA 提供了一套 GRPC 接口来供用户编写获取指标的 GRPC 服务。 KEDA 的 External Scaler 与 External Push Scaler 在 KEDA 的 pod 中运行 ，它作为 GRPC 客户端，从用户编写的 GRPC 服务获取指标。
+## 引言
+
+KEDA 提供了一套 gRPC 接口，供用户编写用于获取指标的 gRPC 服务。
+KEDA 的 External Scaler 和 External Push Scaler 在 KEDA 的 Pod 中运行，作为 gRPC 客户端，从用户编写的 gRPC 服务中获取指标。
 
 GRPC 接口定义:
 
@@ -24,7 +26,7 @@ service ExternalScaler {
 }
 ~~~
 
-External  与 External Push Scaler 的区别
+External 与 External Push Scaler 的区别
 
 ~~~go
 type externalScaler struct {
@@ -41,32 +43,38 @@ type externalPushScaler struct {
 func (s *externalPushScaler) Run(ctx context.Context, active chan<- bool) {}
 ~~~
 
-externalScaler 实现了 PushScaler 的 Run 方法。 当 scaleHandler HandleScalableObject 的时候，如果 Scaler 的类型是 PushScaler ，会执行 Run 方法。
-这区别于其他类型的 Scaler 只能通过 startScaleLoop 处理缩放的逻辑，它还可以通过 StreamIsActive 返回值来触发缩放的逻辑。
+externalScaler 结构实现了基本的伸缩器功能。
+externalPushScaler 结构扩展了 externalScaler，实现了 PushScaler 的 Run 方法。
+当 scaleHandler 处理 ScalableObject 时，如果伸缩器类型是 PushScaler，则会执行 Run 方法。
+这与其他类型的伸缩器不同，后者只能通过 startScaleLoop 处理缩放逻辑，而 PushScaler 还可以通过 StreamIsActive 的返回值来触发缩放逻辑。
 
 ## 场景
 
-假设应用的 session 是由 Redis 存储，期望每个应用的实例最多只处理 100 个 session 的请求。 当 session 的数量大于 100 的时候，会启动一个新的实例。
-当 Redis 实例不可用时，缩放回 1 个实例。
+假设应用的会话（session）由 Redis 存储，我们希望每个应用实例最多只处理 100 个会话请求。当会话数量超过 100 时，启动一个新的实例。若
+Redis 实例不可用，则缩放回 1 个实例。示例场景如下：
 
 eg：
 
-| session count | instance |
-|---------------|----------|
-| 10            | 1        |
-| 100           | 1        |
-| 150           | 2        |
-| ...           | ...      |
-| 200           | 2        |
-| 250           | 3        |
+| 会话数量   | 实例数 |
+|--------|-----|
+| 10     | 1   |
+| 1-100	 | 1   |
+| 101    | 2   |
+| ...    | ... | 
 
-基于上述场景，我们使用 External Scaler 来实现，对应的 GRPC 服务需实现 IsActive、GetMetricSpec、GetMetrics 这三个接口。
- - IsActive 检验 Redis 实例是否可用，不可用时返回 False，且 ScaledObject.spec.minReplicaCount = 1；idleReplicaCount = null。
- - GetMetricSpec 定义 Metric Name 为 session_size，target size 从声明 ScaledObject 的 Metadata[sessionSize] 中获取；并且ScaledObject 声明的 metricType 要为 AverageValue。
- - GetMetrics 返回请求时 Redis 实例的 DBSize。
+## 实现
+
+基于上述场景，我们使用外部伸缩器来实现，对应的 gRPC 服务需要实现 IsActive、GetMetricSpec、GetMetrics 这三个接口：
+
+- IsActive 用于检查 Redis 实例是否可用。若不可用，返回 False，并设置 ScaledObject.spec.minReplicaCount 为 1。
+- GetMetricSpec 定义指标名称为 session_size，目标大小从 ScaledObject 的 Metadata[sessionSize] 中获取。同时，ScaledObject
+  声明的 metricType 应为 AverageValue。
+- GetMetrics 返回请求时 Redis 实例的 DBSize。
 
 ## GRPC 服务端-代码清单
+
 ### RedisSessionExternalScaler.go
+
 ~~~go
 const (
 	metricName               = "session_size"
