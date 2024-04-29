@@ -4,41 +4,23 @@ categories: [ Kubernetes ]
 tags: k8s
 ---
 
-当 Pod 访问 Kubernetes API Server 时，Pod 会被认证为某个特定的 ServiceAccount（例如：default）。 在每个名字空间中，至少存在一个
-ServiceAccount。
+在 Kubernetes 集群中，当一个 Pod 需要与 API Server 通信时，它通常会以特定的 ServiceAccount 身份进行认证。每个 Kubernetes
+命名空间至少会有一个 ServiceAccount，通常被称为 default。如果在创建 Pod 时没有特别指定 ServiceAccount，Kubernetes 会自动为该
+Pod 分配所在命名空间的 default ServiceAccount。
 
-每个 Kubernetes 名字空间至少包含一个 ServiceAccount：也就是该名字空间的默认 ServiceAccount 名为 default。如果你在创建 Pod
-时没有指定
-ServiceAccount，Kubernetes 会自动将该名字空间中名为 default 的 ServiceAccount 分配给该 Pod。
+ServiceAccount 的认证信息，包括令牌，会被存储在 Pod 内每个容器的文件系统中的特定路径下。具体来说，令牌位于
+/var/run/secrets/kubernetes.io/serviceaccount/token；如果提供了证书包，它将被放置在
+/var/run/secrets/kubernetes.io/serviceaccount/ca.crt，用于验证 API 服务器的服务证书。此外，Pod 的命名空间信息会存储在
+/var/run/secrets/kubernetes.io/serviceaccount/namespace 文件中。
 
-该 ServiceAccount 的凭据（令牌）放置在此 Pod 中每个容器的文件系统树中的
-/var/run/secrets/kubernetes.io/serviceaccount/token 处。
+### 使用 kubectl 访问 API
 
-如果证书包可用，则凭据包被放入每个容器的文件系统树中的 /var/run/secrets/kubernetes.io/serviceaccount/ca.crt 处， 且将被用于验证
-API 服务器的服务证书。
+kubectl 是 Kubernetes 的命令行工具，它能够确定是否在 Pod 内运行。当 kubectl 在 Pod 内运行时，它会检查几个关键的环境变量和文件：
 
-最后，用于命名空间域 API 操作的默认命名空间放置在每个容器中的 /var/run/secrets/kubernetes.io/serviceaccount/namespace
-文件中。
+- KUBERNETES_SERVICE_HOST 和 KUBERNETES_SERVICE_PORT 环境变量
+- 服务账户令牌文件 /var/run/secrets/kubernetes.io/serviceaccount/token
 
-通过工具从 Pod 中访问 API：
-
-### kubectl
-
-kubectl 命令首先确定它是否在 Pod 中运行，从而被视为在集群中运行。 它首先检查 `KUBERNETES_SERVICE_HOST` 和
-`KUBERNETES_SERVICE_PORT` 环境变量以及 `/var/run/secrets/kubernetes.io/serviceaccount/token` 中是否存在服务帐户令牌文件。
-如果三个条件都被满足，则假定在集群内进行身份验证。
-
-kubectl 如何处理 ServiceAccount 令牌
-
-假设：
-
-- 有 Kubernetes 服务帐户令牌文件挂载在 /var/run/secrets/kubernetes.io/serviceaccount/token 上，并且
-- 设置了 KUBERNETES_SERVICE_HOST 环境变量，并且
-- 设置了 KUBERNETES_SERVICE_PORT 环境变量，并且
-- 你没有在 kubectl 命令行上明确指定命名空间。
-
-然后 kubectl 假定它正在你的集群中运行。 kubectl 工具查找该 ServiceAccount 的命名空间 （该命名空间与 Pod
-的命名空间相同）并针对该命名空间进行操作。
+如果这些条件都满足，kubectl 会假定它正在集群内部运行，并使用 ServiceAccount 的命名空间（与 Pod 的命名空间相同）来执行操作。
 
 config.go
 
@@ -76,14 +58,11 @@ func InClusterConfig() (*Config, error) {
 }
 ~~~
 
-### JAVA Client
+### 使用 Java 客户端访问 API
 
-JAVA Client 通过以下方式与 Kubernetes API Server 建立连接。
-
-- 如果定义了$KUBECONFIG，则使用该配置文件。
-- 如果$ HOME /。可以找到Kube /config，使用它。
-- 如果可以找到集群内的服务帐户，则假设在集群配置中。
-- 默认为localhost:8080作为最后的手段。
+Java 客户端库提供了一种与 Kubernetes API Server 建立连接的方法。它首先检查环境变量 $KUBECONFIG
+来确定配置文件的位置，然后尝试在用户的主目录中查找 ~/.kube/config。如果这些都不成功，它会尝试使用集群内的
+ServiceAccount。如果所有方法都失败，它会回退到使用 localhost:8080 作为默认值。
 
 ~~~java
 public class ClientBuilder {
