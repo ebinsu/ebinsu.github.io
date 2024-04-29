@@ -1,7 +1,7 @@
 ---
 title: Docker容器中的PID 1解析
 categories: [ Kubernetes ]
-tags: k8s, docker
+tags: [ k8s, docker ]
 ---
 
 ## 容器中的PID 1

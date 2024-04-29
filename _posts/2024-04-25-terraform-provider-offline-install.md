@@ -1,6 +1,6 @@
 ---
 categories: [ Terraform ]
-tags: terraform
+tags: [ k8s, terraform ]
 title: Terraform Provider 离线安装
 ---
 

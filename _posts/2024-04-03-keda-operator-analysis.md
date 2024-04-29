@@ -1,7 +1,7 @@
 ---
 title: Keda Operator 代码分析
-categories: [ Kubernetes, KEDA ]
-tags: keda
+categories: [ KEDA ]
+tags: [ k8s, keda ]
 ---
 
 ## 代码结构

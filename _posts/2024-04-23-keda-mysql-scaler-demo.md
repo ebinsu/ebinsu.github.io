@@ -1,6 +1,6 @@
 ---
-categories: [ Kubernetes, KEDA ]
-tags: keda
+categories: [ KEDA ]
+tags: [ k8s, keda ]
 ---
 
 ## 场景
