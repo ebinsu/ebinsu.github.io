@@ -43,10 +43,57 @@ type externalPushScaler struct {
 func (s *externalPushScaler) Run(ctx context.Context, active chan<- bool) {}
 ~~~
 
-externalScaler 结构实现了基本的伸缩器功能。
-externalPushScaler 结构扩展了 externalScaler，实现了 PushScaler 的 Run 方法。
-当 scaleHandler 处理 ScalableObject 时，如果伸缩器类型是 PushScaler，则会执行 Run 方法。
-这与其他类型的伸缩器不同，后者只能通过 startScaleLoop 处理缩放逻辑，而 PushScaler 还可以通过 StreamIsActive 的返回值来触发缩放逻辑。
+当 scaleHandler `HandleScalableObject` 时，如果 ScalerObject 类型是 PushScaler，则会通过 startPushScalers 方法启动一个线程，线程里调用 externalPushScaler 的Run方法。
+该方法通过 GRPC 请求我们实现的 StreamIsActive 方法，返回的 resp.Result （true/false）决定了 ScalerObject 的 Active 状态，也就是触发 0 -> 1 / 1 -> 0 的逻辑。
+其他类型的ScalerObject，则只能通过 startScaleLoop 方法处理0 ->1 / 1 ->0 的逻辑。
+
+externalPushScaler handleIsActiveStream方法：
+~~~go
+func handleIsActiveStream(ctx context.Context, scaledObjectRef *pb.ScaledObjectRef, grpcClient pb.ExternalScalerClient, active chan<- bool) error {
+	stream, err := grpcClient.StreamIsActive(ctx, scaledObjectRef)
+	if err != nil {
+		return err
+	}
+
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+
+		active <- resp.Result
+	}
+}
+
+~~~
+
+StreamIsActive 例子：
+~~~go
+func (e *RedisSessionExternalScaler) StreamIsActive(ref *ScaledObjectRef, epsServer ExternalScaler_StreamIsActiveServer) error {
+  // 每 10 秒发送Result状态。Result 的值由 redis active key 决定。
+	for {
+		select {
+		case <-epsServer.Context().Done():
+			// call cancelled
+			return nil
+		case <-time.NewTicker(10 * time.Second).C:
+			val, err := e.rdb.Exists("active").Result()
+			if err != nil {
+				// log error
+			} else if val > 0 {
+				active, err := e.rdb.Get("active").Result()
+				if err != nil {
+					// log error
+				} else {
+					epsServer.Send(&IsActiveResponse{
+						Result: active == "1",
+					})
+				}
+			}
+		}
+	}
+}
+~~~
 
 ## 场景
 
