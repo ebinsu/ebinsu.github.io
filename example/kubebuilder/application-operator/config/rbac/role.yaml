@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - webapp.ebinsu.cn
+  resources:
+  - webapps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - webapp.ebinsu.cn
+  resources:
+  - webapps/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - webapp.ebinsu.cn
+  resources:
+  - webapps/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,9 @@
+apiVersion: webapp.ebinsu.cn/v1
+kind: WebApp
+metadata:
+  labels:
+    app.kubernetes.io/name: application-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: webapp-sample
+spec:
+  # TODO(user): Add fields here

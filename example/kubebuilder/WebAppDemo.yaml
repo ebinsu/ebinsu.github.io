@@ -1,0 +1,8 @@
+apiVersion: webapp.ebinsu.cn/v1
+kind: WebApp
+metadata:
+  name: app-demo
+spec:
+  name: app-demo
+  replicas: 1
+  image: "ebinsu/spring-mvc-demo:1.0"
