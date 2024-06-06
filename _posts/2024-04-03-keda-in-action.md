@@ -57,7 +57,7 @@ validating webhooks 可以拒绝请求，但是它们却不能修改在准入请
 
 ![admission_webhook.png](../assets/images/keda/admission_webhook.png)
 
-KEDA 为ScaledObject，TriggerAuthentication，ClusterTriggerAuthentication 添加了Webhook。 详细的见：[验证规则](https://keda.sh/docs/2.14/concepts/admission-webhooks/)。
+KEDA 为ScaledObject，TriggerAuthentication，ClusterTriggerAuthentication 添加了Webhook。 详见：[验证规则](https://keda.sh/docs/2.14/concepts/admission-webhooks/)。
 
 ~~~go
 func setupWebhook(mgr manager.Manager) {
