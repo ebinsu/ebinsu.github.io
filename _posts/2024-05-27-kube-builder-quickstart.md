@@ -144,3 +144,15 @@ app-demo                                NodePort    10.43.136.163   <none>      
 
 ### 编译部署
 
+打包 controller 镜像
+
+make docker-build docker-push IMG=<some-registry>/<project-name>:tag
+
+修改 Makefile 里的 IMG 变量，例：IMG ?= ebinsu/webapp-controller:1.0
+make docker-build docker-push
+
+生成crd
+make manifests
+
+
+

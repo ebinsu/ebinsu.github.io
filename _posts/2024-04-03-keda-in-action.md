@@ -24,11 +24,18 @@ tags: [ k8s, keda ]
 
 ## 3. KEDA 是什么
 
-1. KEDA 提供了一套自定义资源定义（CRD），其常见用途是声明ScaledObject。
+KEDA 提供了一套自定义资源定义（CRD），例如 ScaledObject。 安装 KEDA 时，它会创建 3 个 pod：
+
+### keda-operator
+
 keda-operator 根据声明的 ScaledObject 创建对应的HPA，并能激活HPA的部署（从0扩展到1）。[代码分析](../keda-operator-analysis)
+
 > * 这里的“0 -> 1”指的是，如果当前副本数为0，但HPA定义的最小副本数不为0，则认为关闭了弹性伸缩能力，HPA将不再进行伸缩操作。 而 KEDA 实现了一种控制，一旦缩放到1后，伸缩操作将取决于HPA。
 
-2. KEDA 提供了 keda-operator-metrics-apiserver，实现了 external.metrics.k8s.io API ，为 HPA 获取 Kubernetes 集群外部的指标源的指标。 [代码分析](../keda-operator-metrics-apiserver-analysis)
+### keda-operator-metrics-apiserver
+
+keda-operator-metrics-apiserver，实现了 external.metrics.k8s.io API ，为 HPA 获取 Kubernetes 集群外部的指标。 [代码分析](../keda-operator-metrics-apiserver-analysis)
+
 > * 想要了解当前注册了哪些外部指标服务器，可以使用以下命令：
 ~~~
 kubectl get APIService/v1beta1.external.metrics.k8s.io
@@ -39,7 +46,36 @@ kubectl get scaledobject {scaledObjectName} -o jsonpath={.status.externalMetricN
 kubectl get --raw /apis/external.metrics.k8s.io/v1beta1/namespaces/{namespaces}/{externalMetricNames}?labelSelector=scaledobject.keda.sh/name={scaledObjectName}
 ~~~
 
-3. KEDA 与 HPA并无冲突关系，它们可以同时在 Kubernetes 中使用。但请注意，不要将 KEDA 的 ScaledObject 与 HPA 结合使用来扩展相同的目标资源（例如：Deployment、StatefulSet等）。
+### keda-admission-webhooks
+
+#### admission webhook 是什么?
+在 Kubernetes apiserver 中包含两个特殊的准入控制器：MutatingAdmissionWebhook和ValidatingAdmissionWebhook。
+这两个控制器将发送准入请求到外部的 HTTP 回调服务并接收一个准入响应。如果启用了这两个准入控制器，Kubernetes 管理员可以在集群中创建和配置一个 admission webhook。
+
+validating webhooks 可以拒绝请求，但是它们却不能修改在准入请求中获取的对象，而 mutating webhooks 可以在返回准入响应之前通过创建补丁来修改对象，
+如果 webhook 拒绝了一个请求，则会向最终用户返回错误。
+
+![admission_webhook.png](../assets/images/keda/admission_webhook.png)
+
+KEDA 为ScaledObject，TriggerAuthentication，ClusterTriggerAuthentication 添加了Webhook。 详细的见：[验证规则](https://keda.sh/docs/2.14/concepts/admission-webhooks/)。
+
+~~~go
+func setupWebhook(mgr manager.Manager) {
+	// setup webhooks
+	if err := (&kedav1alpha1.ScaledObject{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ScaledObject")
+		os.Exit(1)
+	}
+	if err := (&kedav1alpha1.TriggerAuthentication{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "TriggerAuthentication")
+		os.Exit(1)
+	}
+	if err := (&kedav1alpha1.ClusterTriggerAuthentication{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ClusterTriggerAuthentication")
+		os.Exit(1)
+	}
+}
+~~~
 
 ## 4. Demo
 
